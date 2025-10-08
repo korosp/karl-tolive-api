@@ -1,66 +1,69 @@
 import express from 'express';
+import multer from 'multer';
 import fs from 'fs';
 import path from 'path';
-import { exec } from 'child_process';
-import util from 'util';
+import ffmpeg from 'fluent-ffmpeg';
 
-const execPromise = util.promisify(exec);
 const router = express.Router();
-
-import multer from 'multer';
-
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// Setup multer untuk upload file
-const upload = multer({ dest: tmpDir });
+const tmpDir = path.join(process.cwd(), 'tmp');
+if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
 
-import fs from 'fs';
-import path from 'path';
-
-// Tentukan folder tmp relatif ke root project
-// Cek apakah folder tmp ada, kalau tidak ada bikin otomatis
-if (!fs.existsSync(tmpDir)) {
-  fs.mkdirSync(tmpDir, { recursive: true });
-  console.log('Folder tmp/ berhasil dibuat otomatis!');
-}
-
-// Endpoint: POST /api/tolive
-// Form-data: video (file), audio (file), fade (optional)
-router.post('/tolive', upload.fields([{ name: 'video' }, { name: 'audio' }]), async (req, res) => {
+// POST /tools/livephoto
+router.post('/livephoto', upload.fields([{ name: 'video' }, { name: 'audio' }]), async (req, res) => {
   try {
-    const videoFile = req.files.video[0].path;
-    const audioFile = req.files.audio[0].path;
-    const fadeDur = parseFloat(req.body.fade) || 0.8;
-    const baseDur = 3;
+    if (!req.files.video || !req.files.audio) {
+      return res.status(400).json({ error: 'Video dan audio wajib dikirim!' });
+    }
 
-    const baseClip = path.join(tmpDir, `base-${Date.now()}.mp4`);
-    const combinedVideo = path.join(tmpDir, `combined-${Date.now()}.mp4`);
-    const outFile = path.join(tmpDir, `out-${Date.now()}.mp4`);
+    const videoBuffer = req.files.video[0].buffer;
+    const audioBuffer = req.files.audio[0].buffer;
+    const fade = parseFloat(req.body.fade) || 0.8;
 
-    // Ambil durasi audio
-    const { stdout: audDurRaw } = await execPromise(
-      `ffprobe -i "${audioFile}" -show_entries format=duration -v quiet -of csv="p=0"`
-    );
-    const audioDuration = parseFloat(audDurRaw.trim());
-    if (isNaN(audioDuration) || audioDuration <= 0) throw new Error('Invalid audio duration');
+    const tmpDir = path.join(process.cwd(), 'tmp');
+    const videoPath = path.join(tmpDir, `video-${Date.now()}.mp4`);
+    const audioPath = path.join(tmpDir, `audio-${Date.now()}.mp3`);
+    const outPath = path.join(tmpDir, `out-${Date.now()}.mp4`);
 
-    // Potong video menjadi base clip
-    await execPromise(
-      `ffmpeg -y -i "${videoFile}" -t ${baseDur} -an -c:v libx264 -pix_fmt yuv420p "${baseClip}"`
-    );
+    fs.writeFileSync(videoPath, videoBuffer);
+    fs.writeFileSync(audioPath, audioBuffer);
 
-    // Hitung berapa banyak clip untuk fade
-    const denom = baseDur - fadeDur;
-    let n = audioDuration <= baseDur ? 1 : Math.ceil((audioDuration - fadeDur) / denom);
-    n = Math.min(Math.max(n, 1), 120);
+    // Proses ffmpeg
+    ffmpeg()
+      .input(videoPath)
+      .input(audioPath)
+      .outputOptions([
+        `-shortest`,
+        `-c:v libx264`,
+        `-pix_fmt yuv420p`,
+        `-c:a aac`,
+        `-b:a 192k`
+      ])
+      .save(outPath)
+      .on('end', () => {
+        const resultBuffer = fs.readFileSync(outPath);
+        res.setHeader('Content-Type', 'video/mp4');
+        res.send(resultBuffer);
 
-    if (n === 1) {
-      fs.copyFileSync(baseClip, combinedVideo);
-    } else {
-      const inputs = Array(n).fill(`-i "${baseClip}"`).join(' ');
-      const prepParts = [];
-      for (let i = 0; i < n; i++) prepParts.push(`[${i}:v]setpts=PTS-STARTPTS,format=yuv420p[v${i}]`);
+        // Hapus file sementara
+        fs.unlinkSync(videoPath);
+        fs.unlinkSync(audioPath);
+        fs.unlinkSync(outPath);
+      })
+      .on('error', (err) => {
+        console.error(err);
+        res.status(500).json({ error: 'Gagal membuat live photo' });
+      });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+export default router;      for (let i = 0; i < n; i++) prepParts.push(`[${i}:v]setpts=PTS-STARTPTS,format=yuv420p[v${i}]`);
 
       const chainParts = [];
       let lastLabel = `[v0]`;
