@@ -1,14 +1,23 @@
 import express from 'express';
-import toliveRouter from './api/tolive.js';
+import fs from 'fs';
+import path from 'path';
+import livephotoRouter from './api/livephoto.js';
 
 const app = express();
+const port = process.env.PORT || 3000;
+
+// Folder tmp
+const tmpDir = path.join(process.cwd(), 'tmp');
+if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
 
 // Middleware
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-// Router API
-app.use('/api', toliveRouter);
+// Route API
+app.use('/tools', livephotoRouter);
 
-// Port
-const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`Server running on port ${port}`));
+// Start server
+app.listen(port, () => {
+  console.log(`Server running at http://localhost:${port}`);
+});
