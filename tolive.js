@@ -3,17 +3,27 @@ import fs from 'fs';
 import path from 'path';
 import { exec } from 'child_process';
 import util from 'util';
-import multer from 'multer';
 
 const execPromise = util.promisify(exec);
 const router = express.Router();
 
-// Folder tmp untuk simpan file sementara
-const tmpDir = path.join(process.cwd(), 'tmp');
-if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+import multer from 'multer';
+
+const storage = multer.memoryStorage();
+const upload = multer({ storage });
 
 // Setup multer untuk upload file
 const upload = multer({ dest: tmpDir });
+
+import fs from 'fs';
+import path from 'path';
+
+// Tentukan folder tmp relatif ke root project
+// Cek apakah folder tmp ada, kalau tidak ada bikin otomatis
+if (!fs.existsSync(tmpDir)) {
+  fs.mkdirSync(tmpDir, { recursive: true });
+  console.log('Folder tmp/ berhasil dibuat otomatis!');
+}
 
 // Endpoint: POST /api/tolive
 // Form-data: video (file), audio (file), fade (optional)
