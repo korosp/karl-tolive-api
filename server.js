@@ -17,12 +17,11 @@ app.post('/tools/livephoto', upload.fields([{ name: 'video' }, { name: 'audio' }
       return res.status(400).json({ error: 'Video dan audio wajib dikirim!' });
     }
 
-    // Convert file buffers ke Base64 agar bisa dikirim ke API
     const videoBase64 = req.files.video[0].buffer.toString('base64');
     const audioBase64 = req.files.audio[0].buffer.toString('base64');
     const fade = parseFloat(req.body.fade) || 0.8;
 
-    // Panggil API Shynne
+    // Panggil Shynne API
     const response = await axios.post(
       'https://shynne-apis.vercel.app/tools/livephoto',
       {
